@@ -38,7 +38,12 @@ def update_output_extern(list_of_contents, list_of_names):
             ], width="auto")
             checkboxes.append(col)
         # Ordne die Spalten nebeneinander in einer Zeile an
-        checkbox_row = dbc.Row(checkboxes, justify="start", className="g-0")
+        checkbox_row = dbc.Row(
+            checkboxes, 
+            justify="start", 
+            className="g-0",
+            style={"overflowX": "auto", "whiteSpace": "nowrap", "display": "flex", "flexWrap": "nowrap"},
+            )
         # Speichere sowohl die Daten als auch die Parameter
         return html.Ul(file_names), {'data': data, 'parameters': parameters}, checkbox_row
     else:

@@ -170,13 +170,13 @@ def update_header_parameters(data_store):
                     row[key] = value
                 table_data.append(row)
         # Spalten definieren
-        columns = [{'name': 'Datei', 'id': 'Datei'}] + [{'name': param, 'id': param} for param in header[3:]]
+        columns = [{'name': 'Datei', 'id': 'Datei'}] + [{'name': param, 'id': param} for param in header[3:-2]]
         # DataTable erstellen
         parameter_table = dash_table.DataTable(
             data=table_data,
             columns=columns,
             style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left', 'padding': '5px', 'minWidth': '60px', 'maxWidth': '400px'},
+            style_cell={'textAlign': 'left', 'padding': '5px', 'minWidth': '60px', 'maxWidth': '500px'},
             style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
         )
         return parameter_table
