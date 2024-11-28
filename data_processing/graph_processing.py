@@ -51,7 +51,7 @@ def update_graph_extern(selected_datasets_per_file, data_store, ids):
             zerolinecolor='black',
             showgrid=True,
             gridcolor='lightgray',
-            range=[x_min, x_max]
+            range=[x_min - abs((x_min * 0.15)), x_max + abs((x_min * 0.15))]
         ),
         yaxis=dict(
             zeroline=True,
@@ -59,7 +59,7 @@ def update_graph_extern(selected_datasets_per_file, data_store, ids):
             zerolinecolor='black',
             showgrid=True,
             gridcolor='lightgray',
-            range=[y_min, y_max]
+            range=[y_min - abs((y_min*0.15)), y_max + abs((y_min*0.15))]
         )
     )
     

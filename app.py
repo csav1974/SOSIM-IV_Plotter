@@ -73,7 +73,7 @@ app.layout = dbc.Container([
     # Upload-Bereich
     dbc.Row([
         dbc.Col([
-            html.H5('Lade die Dateien zum Auswerten hoch:'),
+            html.H5('Dateien zum Auswerten hochladen:'),
             dcc.Upload(
                 id='upload-data',
                 children=dbc.Button(
@@ -90,7 +90,7 @@ app.layout = dbc.Container([
     # Datensatz-Checkboxes
     dbc.Row([
         dbc.Col([
-            html.H5('Wähle die Datensätze zum Anzeigen:'),
+            html.H5('Datensätze Plotten:'),
             html.Div(id='dataset-checkboxes')
         ], width=12)
     ], className="mt-4"),
@@ -176,7 +176,7 @@ def update_header_parameters(data_store):
             data=table_data,
             columns=columns,
             style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left', 'padding': '5px', 'minWidth': '80px', 'maxWidth': '400px'},
+            style_cell={'textAlign': 'left', 'padding': '5px', 'minWidth': '60px', 'maxWidth': '400px'},
             style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
         )
         return parameter_table
