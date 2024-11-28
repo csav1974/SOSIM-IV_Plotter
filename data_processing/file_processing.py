@@ -12,7 +12,7 @@ header = [
     "Vmpp [mV]",
     "Impp [mA]",
     "Pmpp [mW]",
-    "FF",
+    "FF [%]",
     "Rp [kOhm]",
     "Rs [Ohm]",
     "Eta [%]",
