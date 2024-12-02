@@ -2,8 +2,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import io
 
-
-def update_graph_extern(selected_datasets_per_file, data_store, ids):
+def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids):
     # Erstelle eine leere Figur mit go.Figure
     fig = go.Figure()
     
@@ -33,25 +32,47 @@ def update_graph_extern(selected_datasets_per_file, data_store, ids):
                 name=label
             ))
     
-    # Bestimme die minimalen und maximalen Werte, einschließlich 0
-    x_min = min(all_x_values + [0])
-    x_max = max(all_x_values + [0])
-    y_min = min(all_y_values + [0])
-    y_max = max(all_y_values + [0])
+    if axis_range_toggle == 'manual':
+        # Verwende die vom Benutzer eingegebenen Werte
+        try:
+            x_min = float(x_min_input) if x_min_input is not None else None
+            x_max = float(x_max_input) if x_max_input is not None else None
+            y_min = float(y_min_input) if y_min_input is not None else None
+            y_max = float(y_max_input) if y_max_input is not None else None
+        except ValueError:
+            # Falls die Eingaben keine gültigen Zahlen sind, verwende automatische Bereiche
+            x_min = None
+            x_max = None
+            y_min = None
+            y_max = None
+    else:
+        # Bestimme die minimalen und maximalen Werte, einschließlich 0
+        x_min = min(all_x_values + [0])
+        x_max = max(all_x_values + [0])
+        y_min = min(all_y_values + [0])
+        y_max = max(all_y_values + [0])
+        
+        # Füge etwas Abstand hinzu (15% des Bereichs)
+        x_margin = abs((x_max - x_min) * 0.15)
+        y_margin = abs((y_max - y_min) * 0.15)
+        x_min -= x_margin
+        x_max += x_margin
+        y_min -= y_margin
+        y_max += y_margin
 
     # Aktualisiere das Layout der Figur
     fig.update_layout(
-        title='IV-Plot',
         xaxis_title='Voltage [mV]',
         yaxis_title='Current [mA]',
         legend_title='Datensätze',
+        showlegend=True,
         xaxis=dict(
             zeroline=True,
             zerolinewidth=2,
             zerolinecolor='black',
             showgrid=True,
             gridcolor='lightgray',
-            range=[x_min - abs((x_min * 0.15)), x_max + abs((x_min * 0.15))]
+            range=[x_min, x_max] if x_min is not None and x_max is not None else None
         ),
         yaxis=dict(
             zeroline=True,
@@ -59,7 +80,7 @@ def update_graph_extern(selected_datasets_per_file, data_store, ids):
             zerolinecolor='black',
             showgrid=True,
             gridcolor='lightgray',
-            range=[y_min - abs((y_min*0.15)), y_max + abs((y_min*0.15))]
+            range=[y_min, y_max] if y_min is not None and y_max is not None else None
         )
     )
     

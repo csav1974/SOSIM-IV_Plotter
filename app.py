@@ -2,6 +2,7 @@ import os
 import base64
 import io
 import pylightxl
+import math
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -96,14 +97,70 @@ app.layout = dbc.Container([
         ], width=12)
     ], className="mt-4"),
 
-    # Graph
+    # Achsenbereich einstellen
     dbc.Row([
         dbc.Col([
             dcc.Graph(
                 id='IV-graph'
             )
-        ], width=12)
-    ], className="mt-4"),
+        ], width=8),
+        dbc.Col([
+            html.H5('Achsenbereich einstellen:'),
+            dbc.RadioItems(
+                id='axis-range-toggle',
+                options=[
+                    {'label': 'Automatisch', 'value': 'auto'},
+                    {'label': 'Manuell', 'value': 'manual'}
+                ],
+                value='auto',
+                inline=True
+            ),
+            # Preset-Optionen (werden nur angezeigt, wenn 'Manuell' ausgewählt ist)
+            html.Div(id='preset-options', children=[
+                dbc.RadioItems(
+                    id='preset-toggle',
+                    options=[
+                        {'label': 'Preset-CIGS', 'value': 'preset1'},
+                        {'label': 'Preset-Tandem', 'value': 'preset2'}
+                    ],
+                    value='preset1',
+                    inline=True
+                )
+            ], style={'display': 'none'}),
+            # X-Achse Eingabefelder
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('X-Min:'),
+                    dbc.Input(id='x-min-input', type='number', disabled=True)
+                ], width=4),
+                dbc.Col([
+                    dbc.Label('X-Max:'),
+                    dbc.Input(id='x-max-input', type='number', disabled=True)
+                ], width=4)
+            ]),
+            # Y-Achse Eingabefelder
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('Y-Min:'),
+                    dbc.Input(id='y-min-input', type='number', disabled=True)
+                ], width=4),
+                dbc.Col([
+                    dbc.Label('Y-Max:'),
+                    dbc.Input(id='y-max-input', type='number', disabled=True)
+                ], width=4)
+            ])
+        ], width=4)
+    ], className="mt-4", align="center"),
+
+    # # Graph
+    # dbc.Row([
+    #     dbc.Col([
+    #         dcc.Graph(
+    #             id='IV-graph'
+    #         )
+    #     ], width=8)
+    # ], className="mt-4"),
+
 
     # Parameter-Tabelle
     dbc.Row([
@@ -128,6 +185,41 @@ app.layout = dbc.Container([
 def update_output(list_of_contents, list_of_names):
     return update_output_extern(list_of_contents, list_of_names)
 
+
+# Callback zum Aktivieren/Deaktivieren der Eingabefelder und Anzeigen der Preset-Optionen
+@app.callback(
+    [Output('x-min-input', 'disabled'),
+     Output('x-max-input', 'disabled'),
+     Output('y-min-input', 'disabled'),
+     Output('y-max-input', 'disabled'),
+     Output('preset-options', 'style'),
+     Output('preset-toggle', 'value')],
+    Input('axis-range-toggle', 'value')
+)
+def toggle_axis_inputs(axis_range_toggle):
+    if axis_range_toggle == 'manual':
+        return [False, False, False, False, {'display': 'block'}, 'preset1']
+    else:
+        return [True, True, True, True, {'display': 'none'}, dash.no_update]
+
+
+# Callback zum Setzen der Eingabefelder basierend auf dem ausgewählten Preset
+@app.callback(
+    [Output('x-min-input', 'value'),
+     Output('x-max-input', 'value'),
+     Output('y-min-input', 'value'),
+     Output('y-max-input', 'value')],
+    Input('preset-toggle', 'value')
+)
+def update_axis_inputs(preset_value):
+    if preset_value == 'preset1':
+        return [-500, 800, -200, 600]  # Werte für Preset-1
+    elif preset_value == 'preset2':
+        return [-800, 1500, -400, 800]  # Werte für Preset-2
+    else:
+        return [dash.no_update]*4
+
+
 # Callback zur Synchronisation von Datei- und Datensatz-Checkboxes
 @app.callback(
     Output({'type': 'dataset-checklist', 'index': MATCH}, 'value'),
@@ -145,12 +237,17 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
 # Callback zur Aktualisierung des Graphen basierend auf den ausgewählten Datensätzen
 @app.callback(
     Output('IV-graph', 'figure'),
-    [Input({'type': 'dataset-checklist', 'index': ALL}, 'value')],
+    [Input({'type': 'dataset-checklist', 'index': ALL}, 'value'),
+     Input('axis-range-toggle', 'value'),
+     Input('x-min-input', 'value'),
+     Input('x-max-input', 'value'),
+     Input('y-min-input', 'value'),
+     Input('y-max-input', 'value')],
     [State('data-store', 'data'),
      State({'type': 'dataset-checklist', 'index': ALL}, 'id')]
 )
-def update_graph(selected_datasets_per_file, data_store, ids):
-    return update_graph_extern(selected_datasets_per_file, data_store, ids)
+def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids):
+    return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids)
     
 # Callback zur Anzeige der Parameter in einer Tabelle
 @app.callback(
