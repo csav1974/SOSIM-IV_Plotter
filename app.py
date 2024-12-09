@@ -1,8 +1,12 @@
-import os
-import base64
-import io
-import pylightxl
-import math
+import socket
+import sys
+
+def check_port_available(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((host, port))
+    sock.close()
+    return result != 0
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -364,4 +368,12 @@ def update_header_parameters(data_store):
 
 # Server starten
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    HOST = '127.0.0.1'
+    PORT = 8050
+    
+    # Prüfe, ob Port frei ist
+    if not check_port_available(HOST, PORT):
+        print(f"Port {PORT} ist bereits belegt. Das Programm wird beendet.")
+        sys.exit(0)
+    
+    app.run_server(host=HOST, port=PORT, debug=False)
