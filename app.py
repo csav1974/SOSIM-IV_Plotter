@@ -156,15 +156,6 @@ app.layout = dbc.Container([
         ], width=4)
     ], className="mt-4", align="center"),
 
-    # # Graph
-    # dbc.Row([
-    #     dbc.Col([
-    #         dcc.Graph(
-    #             id='IV-graph'
-    #         )
-    #     ], width=8)
-    # ], className="mt-4"),
-
 
     # Parameter-Tabelle
     dbc.Row([
@@ -180,15 +171,23 @@ app.layout = dbc.Container([
 
 # Callback zum Verarbeiten der hochgeladenen Dateien
 @app.callback(
-    [Output('file-list', 'children'),
-     Output('data-store', 'data'),
-     Output('dataset-checkboxes', 'children')],
+    [
+        Output('file-list', 'children'),
+        Output('data-store', 'data'),
+        Output('dataset-checkboxes', 'children')
+    ],
     [Input('upload-data', 'contents')],
-    [State('upload-data', 'filename')]
+    [
+        State('upload-data', 'filename'),
+        State('data-store', 'data')
+    ]
 )
-def update_output(list_of_contents, list_of_names):
-    return update_output_extern(list_of_contents, list_of_names)
-
+def update_output(list_of_contents, list_of_names, existing_data):
+    """
+    Callback, der alte Daten aus existing_data übernimmt und mit den neu hochgeladenen
+    Dateien zusammenführt.
+    """
+    return update_output_extern(list_of_contents, list_of_names, existing_data)
 
 # Callback zum Aktivieren/Deaktivieren der Eingabefelder und Anzeigen der Preset-Optionen
 @app.callback(
