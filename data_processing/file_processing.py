@@ -43,12 +43,20 @@ def process_file_extern(contents, filename):
 
     # Überprüfen, ob genügend Zeilen vorhanden sind
     if len(alle_zeilen) < 2:
-        parameter_values = None
+        parameter_values_list = None
     else:
-        # Erste Zeile ist der Header, zweite Zeile sind die Parameterwerte
-        parameter_values = alle_zeilen[1]
-        # Entferne die ersten zwei Zeilen (Header und Parameterwerte)
+        parameter_values_list = []
+        # Annahme: Erste Zeile ist der Header
+        i = 1
+        # Solange die Zeile als Parameterzeile interpretiert werden kann, hinzufügen.
+        # Hier muss definiert werden, wann eine Zeile als Parameterzeile gilt.
+        while i < len(alle_zeilen):
+            if is_parameter_row(alle_zeilen[i]):
+                parameter_values_list.append(alle_zeilen[i])
+            i += 1
+        # Die verbleibenden Zeilen enthalten dann die eigentlichen Daten
         alle_zeilen = alle_zeilen[2:]
+
 
     # Schritt 2: Verarbeitung der Datenabschnitte
     df_list = []
@@ -78,4 +86,9 @@ def process_file_extern(contents, filename):
         df['Current [mA]'] = pd.to_numeric(df['Current [mA]'], errors='coerce') * -1
         df = df.dropna(subset=['Voltage [mV]', 'Current [mA]'])
         df_list.append(df)
-    return df_list, parameter_values
+    
+    return df_list, parameter_values_list
+
+def is_parameter_row(row):
+    count = sum(1 for cell in row if cell is not None and cell != '')
+    return count >= 10

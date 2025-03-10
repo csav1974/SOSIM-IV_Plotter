@@ -18,7 +18,6 @@ from dash.dash_table.Format import Format, Scheme
 import dash_bootstrap_components as dbc
 
 from data_processing.data_processing import update_output_extern
-from data_processing.file_processing import process_file_extern
 from data_processing.graph_processing import update_graph_extern
 
 # Header-Definition
@@ -56,9 +55,6 @@ header = [
     "Spectral Flux Density [W/m²]"
 ]
 
-# Funktion zum Verarbeiten einer Datei und Extrahieren der DataFrames und Parameterwerte
-def process_file(contents, filename):
-    return process_file_extern(contents, filename)
 
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -169,6 +165,8 @@ app.layout = dbc.Container([
     dcc.Store(id='data-store')
 ], fluid=True)
 
+
+
 # Callback zum Verarbeiten der hochgeladenen Dateien
 @app.callback(
     [
@@ -255,115 +253,155 @@ def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_m
 # Callback zur Anzeige der Parameter in einer Tabelle
 @app.callback(
     Output('header-parameters', 'children'),
-    Input('data-store', 'data')
+    [
+        Input('data-store', 'data'),
+        Input({'type': 'file-checkbox', 'index': ALL}, 'value'),
+        Input({'type': 'file-checkbox', 'index': ALL}, 'id'),
+        Input({'type': 'dataset-checklist', 'index': ALL}, 'value'),
+        Input({'type': 'dataset-checklist', 'index': ALL}, 'id')
+    ]
 )
-def update_header_parameters(data_store):
+def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
     if not data_store or 'parameters' not in data_store:
         return ''
-    else:
-        parameters = data_store['parameters']
-        table_data = []
-        formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]' 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
-        for filename, param_values in parameters.items():
-            if param_values is not None:
-                # Erstelle ein Dictionary mit 'Datei' und den Parameterwerten
-                row = {'Datei': filename}
+    
+    # Ermittele aktive Dateien anhand der Datei-Checkboxen:
+    active_files = set()
+    for val, comp_id in zip(file_checkbox_values, file_checkbox_ids):
+        # Wenn die Checkbox einen Wert enthält, ist sie aktiv
+        if val and comp_id.get('index'):
+            active_files.add(comp_id['index'])
+    
+    # Ermittele für jede Datei die aktiv ausgewählten Datensätze:
+    active_datasets = {}
+    for val, comp_id in zip(dataset_checklist_values, dataset_checklist_ids):
+        if comp_id.get('index'):
+            # Falls nichts ausgewählt ist, kann man alternativ alle Datensätze als aktiv interpretieren
+            active_datasets[comp_id['index']] = set(val) if val else set()
+    
+    table_data = []
+    # Beachte: formatted_keys muss korrekt getrennt sein
+    formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]', 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
+    
+    # Iteriere über alle Dateien und deren Parameterzeilen
+    for filename, param_rows in data_store['parameters'].items():
+        # Nur für Dateien, deren Checkbox aktiv ist:
+        if filename not in active_files:
+            continue
+        if param_rows is not None:
+            # Hole die ausgewählten Datensatz-Indizes für diese Datei
+            selected_indices = active_datasets.get(filename, set(range(len(param_rows))))
+            for idx, param_values in enumerate(param_rows):
+                # Nur Parameterzeilen einfügen, wenn deren Index in der Auswahl enthalten ist
+                if idx not in selected_indices:
+                    continue
+                # Erstelle eine Zeile – Kennzeichnung mit Dateiname und Parameterzeilen-Index
+                row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
                 for key, value in zip(header, param_values):
                     if key in formatted_keys and value is not None and value != 'Inf':
-                        if key == 'FF':
-                            row[key] = float(value) *100
+                        if key == 'FF [%]':
+                            row[key] = float(value) * 100
                         else:
                             row[key] = float(value)
                     else:
                         row[key] = value
                 table_data.append(row)
-        # Spalten definieren
-        columns = [{'name': 'Datei', 'id': 'Datei'}]
-        for param in header[3:-2]:
-            if param == 'Isc [mA]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=1, scheme=Scheme.fixed)
-                })
-            elif param == 'Voc [mV]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=0, scheme=Scheme.fixed)
-                })
-            elif param == 'Vmpp [mV]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=0, scheme=Scheme.fixed)
-                })
-            elif param == 'Impp [mA]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=1, scheme=Scheme.fixed)
-                })
-            elif param == 'Pmpp [mW]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=2, scheme=Scheme.fixed)
-                })
-            elif param == 'FF [%]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision = 2, scheme=Scheme.fixed)
-                })
-            elif param == 'Rp [kOhm]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=2, scheme=Scheme.fixed)
-                })
-            elif param == 'Rs [Ohm]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=1, scheme=Scheme.fixed)
-                })
-            elif param == 'Eta [%]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=1, scheme=Scheme.fixed)
-                })
-            elif param == 'Jsc [mA/cm²]':
-                columns.append({
-                    'name': param,
-                    'id': param,
-                    'type': 'numeric',
-                    'format': Format(precision=1, scheme=Scheme.fixed)
-                })
-            else:
-                columns.append({
-                    'name': param,
-                    'id': param
-                })
-        # DataTable erstellen
-        parameter_table = dash_table.DataTable(
-            data=table_data,
-            columns=columns,
-            style_table={'overflowX': 'auto'},
-            style_cell={'textAlign': 'left', 'padding': '5px', 'minWidth': '60px', 'maxWidth': '500px'},
-            style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
-        )
-        return parameter_table
+    
+    # Definiere die Spalten (hier beispielhaft für die Spalten ab der 3. bis vorletzten Header-Spalte)
+    columns = [{'name': 'Datei', 'id': 'Datei'}]
+    for param in header[3:-2]:
+        if param == 'Isc [mA]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=1, scheme=Scheme.fixed)
+            })
+        elif param == 'Voc [mV]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=0, scheme=Scheme.fixed)
+            })
+        elif param == 'Vmpp [mV]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=0, scheme=Scheme.fixed)
+            })
+        elif param == 'Impp [mA]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=1, scheme=Scheme.fixed)
+            })
+        elif param == 'Pmpp [mW]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=2, scheme=Scheme.fixed)
+            })
+        elif param == 'FF [%]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=2, scheme=Scheme.fixed)
+            })
+        elif param == 'Rp [kOhm]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=2, scheme=Scheme.fixed)
+            })
+        elif param == 'Rs [Ohm]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=1, scheme=Scheme.fixed)
+            })
+        elif param == 'Eta [%]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=1, scheme=Scheme.fixed)
+            })
+        elif param == 'Jsc [mA/cm²]':
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=1, scheme=Scheme.fixed)
+            })
+        else:
+            columns.append({
+                'name': param,
+                'id': param
+            })
+    
+    parameter_table = dash_table.DataTable(
+        data=table_data,
+        columns=columns,
+        style_table={'overflowX': 'auto', 'paddingBottom': '20px'},
+        style_cell={
+        'textAlign': 'left',
+        'padding': '5px',
+        'minWidth': '60px',
+        'whiteSpace': 'nowrap',  # verhindert umbrüche
+        'overflow': 'visible'    # Verhindert abgeschnittenen Text
+        },
+        style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
+    )
+    return parameter_table
+
+
 
 # Server starten
 if __name__ == '__main__':

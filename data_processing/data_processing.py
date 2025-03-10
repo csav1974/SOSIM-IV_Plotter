@@ -69,7 +69,7 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
             checkboxes,
             justify="start",
             className="g-0",
-            style={"overflowX": "auto", "whiteSpace": "nowrap", "display": "flex", "flexWrap": "nowrap"}
+            style={"overflowX": "auto", "whiteSpace": "nowrap", "display": "flex", "flexWrap": "nowrap", "paddingBottom": "20px"}
         )
 
         # Liste von HTML <li> für alle bisher bekannten Dateinamen
@@ -87,11 +87,12 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
     # Wir gehen die neu hochgeladenen Dateien durch:
     for contents, filename in zip(list_of_contents, list_of_names):
         # Datei verarbeiten (DataFrame-Liste + Parameterwerte)
-        df_list, parameter_values = process_file_extern(contents, filename)
+        df_list, parameter_values_list = process_file_extern(contents, filename)
+
 
         # DataFrames in JSON konvertieren, damit sie in dcc.Store speicherbar sind
         data[filename] = [df.to_json(date_format='iso', orient='split') for df in df_list]
-        parameters[filename] = parameter_values
+        parameters[filename] = parameter_values_list
 
         # Falls wir diese Datei noch nicht kennen, fügen wir sie in die Liste der Filenamen ein
         if filename not in existing_data['file_names']:
@@ -103,7 +104,6 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
     # Mergen: alte und neue Daten
     existing_data['data'].update(data)
     existing_data['parameters'].update(parameters)
-
     # -------------------------------------
     # 4) AUFBAU DES LAYOUTS (DATEIEN + CHECKBOXES)
     # -------------------------------------
@@ -143,6 +143,6 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
     # 5) RÜCKGABE
     # -------------------------------------
     #  - HTML-Liste sämtlicher Dateien (alt + neu)
-    #  - Das gemergte existing_data (enthält Data, Parameter, Dateinamen, Checkbox-Infos)
+    #  - Das gemergte existing_data (enthält Data, Parameter, Dateinamen, Checkbox-Infos) (Parameter enthält arrays)
     #  - Checkboxes für alle Dateien
     return html.Ul(all_file_names_html), existing_data, checkbox_row
