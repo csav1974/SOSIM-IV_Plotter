@@ -41,6 +41,10 @@ header = [
 def process_file_extern(contents, filename):
     alle_zeilen = read_input(contents)
 
+    alle_zeilen = [
+        [cell.replace('\r\n', '\n').replace('\r', '\n') if isinstance(cell, str) else cell for cell in row]
+        for row in alle_zeilen
+    ]
     # Überprüfen, ob genügend Zeilen vorhanden sind
     if len(alle_zeilen) < 2:
         parameter_values_list = None

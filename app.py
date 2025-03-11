@@ -298,7 +298,7 @@ def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids
                 # Erstelle eine Zeile – Kennzeichnung mit Dateiname und Parameterzeilen-Index
                 row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
                 for key, value in zip(header, param_values):
-                    if key in formatted_keys and value is not None and value != 'Inf':
+                    if key in formatted_keys and value is not None and value != 'Inf' and str(value).strip().upper() != '#NV':
                         if key == 'FF [%]':
                             row[key] = float(value) * 100
                         else:
