@@ -106,6 +106,26 @@ app.layout = dbc.Container([
         ], width=8),
         dbc.Col([
             html.H5('Achsenbereich einstellen:'),
+            html.Div(
+                [
+                    dbc.Button(
+                        'x-Flip',
+                        id='x-flip-btn',
+                        color='primary',
+                        outline=True,
+                        active=False,       # start inaktiv
+                        className='me-2'
+                    ),
+                    dbc.Button(
+                        'y-Flip',
+                        id='y-flip-btn',
+                        color='primary',
+                        outline=True,
+                        active=False        # start inaktiv
+                    )
+                ],
+                className='d-flex align-items-center mb-3'
+            ),
             dbc.RadioItems(
                 id='axis-range-toggle',
                 options=[
@@ -220,6 +240,33 @@ def update_axis_inputs(preset_value):
     else:
         return [dash.no_update]*4
 
+# Callback für Achsen Spiegelung
+@app.callback(
+    [
+        Output('x-flip-btn', 'active'),
+        Output('x-flip-btn', 'outline'),
+        Output('y-flip-btn', 'active'),
+        Output('y-flip-btn', 'outline'),
+    ],
+    [
+        Input('x-flip-btn', 'n_clicks'),
+        Input('y-flip-btn', 'n_clicks')
+    ],
+    [
+        State('x-flip-btn', 'active'),
+        State('y-flip-btn', 'active')
+    ],
+    prevent_initial_call=True
+)
+def toggle_flip_buttons(x_n, y_n, x_active, y_active):
+    ctx = dash.callback_context.triggered[0]['prop_id'].split('.')[0]
+    if ctx == 'x-flip-btn':
+        x_active = not x_active
+    elif ctx == 'y-flip-btn':
+        y_active = not y_active
+
+    # outline umkehren, damit aktiv = gefüllt, inaktiv = outline
+    return x_active, not x_active, y_active, not y_active
 
 # Callback zur Synchronisation von Datei- und Datensatz-Checkboxes
 @app.callback(
@@ -243,12 +290,15 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
      Input('x-min-input', 'value'),
      Input('x-max-input', 'value'),
      Input('y-min-input', 'value'),
-     Input('y-max-input', 'value')],
+     Input('y-max-input', 'value'),
+     Input('x-flip-btn', 'active'),   
+     Input('y-flip-btn', 'active'),
+     ],
     [State('data-store', 'data'),
      State({'type': 'dataset-checklist', 'index': ALL}, 'id')]
 )
-def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids):
-    return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids)
+def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
+    return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
     
 # Callback zur Anzeige der Parameter in einer Tabelle
 @app.callback(

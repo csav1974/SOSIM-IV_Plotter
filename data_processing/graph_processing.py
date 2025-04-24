@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import io
 
-def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, data_store, ids):
+def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
     # Erstelle eine leere Figur mit go.Figure
     fig = go.Figure()
     
@@ -20,17 +20,29 @@ def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_inp
             df = pd.read_json(io.StringIO(df_json), orient='split')
             label = f'{filename} - Datensatz {idx + 1}'
 
-            # Sammle alle x- und y-Werte für die Achsenskalierung
-            all_x_values.extend(df['Voltage [mV]'].tolist())
-            all_y_values.extend(df['Current [mA]'].tolist())
 
-            # Füge die Daten dem Graphen hinzu
-            fig.add_trace(go.Scatter(
-                x=df['Voltage [mV]'],
-                y=df['Current [mA]'],
-                mode='lines',
-                name=label
-            ))
+            # Bereite die x- und y-Werte vor und flippe sie ggf.
+            x_vals = df['Voltage [mV]']
+            y_vals = df['Current [mA]']
+
+            if x_flip_btn:      # hier deine Variable aus dem Callback
+                x_vals = -1 * x_vals
+            if y_flip_btn:      # hier deine Variable aus dem Callback
+                y_vals = -1 * y_vals
+
+            # Sammle alle x- und y-Werte für die Achsenskalierung
+            all_x_values.extend(x_vals.tolist())
+            all_y_values.extend(y_vals.tolist())
+
+            # Füge die (ggf. geflippten) Daten dem Graphen hinzu
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode='lines',
+                    name=label
+                )
+            )
     
     if axis_range_toggle == 'manual':
         # Verwende die vom Benutzer eingegebenen Werte
