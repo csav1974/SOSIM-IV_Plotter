@@ -177,6 +177,13 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.H5('Parameter der hochgeladenen Dateien:'),
+            dbc.Button(
+                'Download Data',
+                id='download-btn',
+                color='success',
+                className='mb-2'
+            ),
+            dcc.Download(id='download-data'),
             html.Div(id='header-parameters')
         ], width=12)
     ], className="mt-4"),
@@ -300,6 +307,46 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
 def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
     return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
     
+# Hilfsfunktion zum Vorbereiten der Tabellendaten basierend auf den aktiven Auswahlen
+def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
+    if not data_store or 'parameters' not in data_store:
+        return []
+
+    active_files = set()
+    for val, comp_id in zip(file_checkbox_values, file_checkbox_ids):
+        if val and comp_id.get('index'):
+            active_files.add(comp_id['index'])
+
+    active_datasets = {}
+    for val, comp_id in zip(dataset_checklist_values, dataset_checklist_ids):
+        if comp_id.get('index'):
+            active_datasets[comp_id['index']] = set(val) if val else set()
+
+    table_data = []
+    formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]', 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
+
+    for filename, param_rows in data_store['parameters'].items():
+        if filename not in active_files:
+            continue
+        if param_rows is not None:
+            selected_indices = set(active_datasets.get(filename, set(range(len(param_rows)))))
+            for idx, param_values in enumerate(param_rows):
+                if idx not in selected_indices:
+                    continue
+                row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
+                for key, value in zip(header, param_values):
+                    if key in formatted_keys and value is not None and value != 'Inf' and str(value).strip().upper() != '#NV':
+                        if key == 'FF [%]':
+                            row[key] = float(value) * 100
+                        else:
+                            row[key] = float(value)
+                    else:
+                        row[key] = value
+                table_data.append(row)
+
+    return table_data
+
+
 # Callback zur Anzeige der Parameter in einer Tabelle
 @app.callback(
     Output('header-parameters', 'children'),
@@ -314,49 +361,15 @@ def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_m
 def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
     if not data_store or 'parameters' not in data_store:
         return ''
-    
-    # Ermittele aktive Dateien anhand der Datei-Checkboxen:
-    active_files = set()
-    for val, comp_id in zip(file_checkbox_values, file_checkbox_ids):
-        # Wenn die Checkbox einen Wert enthält, ist sie aktiv
-        if val and comp_id.get('index'):
-            active_files.add(comp_id['index'])
-    
-    # Ermittele für jede Datei die aktiv ausgewählten Datensätze:
-    active_datasets = {}
-    for val, comp_id in zip(dataset_checklist_values, dataset_checklist_ids):
-        if comp_id.get('index'):
-            # Falls nichts ausgewählt ist, kann man alternativ alle Datensätze als aktiv interpretieren
-            active_datasets[comp_id['index']] = set(val) if val else set()
-    
-    table_data = []
-    # Beachte: formatted_keys muss korrekt getrennt sein
-    formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]', 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
-    
-    # Iteriere über alle Dateien und deren Parameterzeilen
-    for filename, param_rows in data_store['parameters'].items():
-        # Nur für Dateien, deren Checkbox aktiv ist:
-        if filename not in active_files:
-            continue
-        if param_rows is not None:
-            # Hole die ausgewählten Datensatz-Indizes für diese Datei
-            selected_indices = active_datasets.get(filename, set(range(len(param_rows))))
-            for idx, param_values in enumerate(param_rows):
-                # Nur Parameterzeilen einfügen, wenn deren Index in der Auswahl enthalten ist
-                if idx not in selected_indices:
-                    continue
-                # Erstelle eine Zeile – Kennzeichnung mit Dateiname und Parameterzeilen-Index
-                row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
-                for key, value in zip(header, param_values):
-                    if key in formatted_keys and value is not None and value != 'Inf' and str(value).strip().upper() != '#NV':
-                        if key == 'FF [%]':
-                            row[key] = float(value) * 100
-                        else:
-                            row[key] = float(value)
-                    else:
-                        row[key] = value
-                table_data.append(row)
-    
+
+    table_data = prepare_parameter_table_data(
+        data_store,
+        file_checkbox_values,
+        file_checkbox_ids,
+        dataset_checklist_values,
+        dataset_checklist_ids
+    )
+
     # Definiere die Spalten (hier beispielhaft für die Spalten ab der 3. bis vorletzten Header-Spalte)
     columns = [{'name': 'Datei', 'id': 'Datei'}]
     for param in header[3:-2]:
@@ -450,6 +463,33 @@ def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids
         style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
     )
     return parameter_table
+
+
+# Callback zum Herunterladen der ausgewählten Parameter als CSV
+@app.callback(
+    Output('download-data', 'data'),
+    Input('download-btn', 'n_clicks'),
+    State('data-store', 'data'),
+    State({'type': 'file-checkbox', 'index': ALL}, 'value'),
+    State({'type': 'file-checkbox', 'index': ALL}, 'id'),
+    State({'type': 'dataset-checklist', 'index': ALL}, 'value'),
+    State({'type': 'dataset-checklist', 'index': ALL}, 'id'),
+    prevent_initial_call=True
+)
+def download_selected_data(n_clicks, data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
+    table_data = prepare_parameter_table_data(
+        data_store,
+        file_checkbox_values,
+        file_checkbox_ids,
+        dataset_checklist_values,
+        dataset_checklist_ids
+    )
+
+    if not table_data:
+        return dash.no_update
+
+    df = pd.DataFrame(table_data)
+    return dcc.send_data_frame(df.to_csv, 'selected_data.csv', index=False)
 
 
 
