@@ -55,6 +55,12 @@ header = [
     "Spectral Flux Density [W/m²]"
 ]
 
+PARAMETER_TABLE_COLUMNS = header[3:-2]
+DOWNLOADABLE_COLUMNS = ['Datei'] + PARAMETER_TABLE_COLUMNS
+DEFAULT_DOWNLOAD_COLUMNS = [
+    column for column in ["Datei", "Isc [mA]", "Voc [mV]", "FF [%]", "Eta [%]"]
+    if column in DOWNLOADABLE_COLUMNS
+]
 
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -172,16 +178,36 @@ app.layout = dbc.Container([
         ], width=4)
     ], className="mt-4", align="center"),
 
-
     # Parameter-Tabelle
     dbc.Row([
         dbc.Col([
             html.H5('Parameter der hochgeladenen Dateien:'),
-            dbc.Button(
-                'Download Data',
-                id='download-btn',
-                color='success',
-                className='mb-2'
+            html.Div(
+                [
+                    dbc.Button('Download Data', id='download-btn', color='success'),
+                    html.Div(
+                        dbc.Checklist(
+                            id='download-columns',
+                            options=[{'label': c, 'value': c} for c in DOWNLOADABLE_COLUMNS],
+                            value=DEFAULT_DOWNLOAD_COLUMNS,
+                            inline=True,
+                            # Abstand zwischen Häkchen und Text
+                            inputClassName='me-2',
+                            # Abstand zwischen Items
+                            labelClassName='me-4',
+                            # Jede Beschriftung bekommt eine „Spalten“-Breite und kein Umbruch
+                            labelStyle={
+                                'display': 'inline-block',
+                                'minWidth': '2rem',     # anpassen (z.B. 10rem, 14rem, 18ch, …)
+                                'whiteSpace': 'nowrap'
+                            },
+                            className='d-inline-flex flex-nowrap'
+                        ),
+                        className='ms-3 flex-grow-1 overflow-x-auto',
+                        style={'minWidth': 0}  # wichtig, damit das Overflow greift
+                    )
+                ],
+                className='d-flex align-items-center gap-2 mb-2'
             ),
             dcc.Download(id='download-data'),
             html.Div(id='header-parameters')
@@ -191,8 +217,6 @@ app.layout = dbc.Container([
     # Versteckter Speicher für die Daten
     dcc.Store(id='data-store')
 ], fluid=True)
-
-
 
 # Callback zum Verarbeiten der hochgeladenen Dateien
 @app.callback(
@@ -229,7 +253,6 @@ def toggle_axis_inputs(axis_range_toggle):
         return [False, False, False, False, {'display': 'block'}, 'preset1']
     else:
         return [True, True, True, True, {'display': 'none'}, dash.no_update]
-
 
 # Callback zum Setzen der Eingabefelder basierend auf dem ausgewählten Preset
 @app.callback(
@@ -298,15 +321,14 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
      Input('x-max-input', 'value'),
      Input('y-min-input', 'value'),
      Input('y-max-input', 'value'),
-     Input('x-flip-btn', 'active'),   
-     Input('y-flip-btn', 'active'),
-     ],
+     Input('x-flip-btn', 'active'),
+     Input('y-flip-btn', 'active')],
     [State('data-store', 'data'),
      State({'type': 'dataset-checklist', 'index': ALL}, 'id')]
 )
 def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
     return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
-    
+
 # Hilfsfunktion zum Vorbereiten der Tabellendaten basierend auf den aktiven Auswahlen
 def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
     if not data_store or 'parameters' not in data_store:
@@ -335,6 +357,8 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
                     continue
                 row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
                 for key, value in zip(header, param_values):
+                    if key not in PARAMETER_TABLE_COLUMNS:
+                        continue
                     if key in formatted_keys and value is not None and value != 'Inf' and str(value).strip().upper() != '#NV':
                         if key == 'FF [%]':
                             row[key] = float(value) * 100
@@ -345,7 +369,6 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
                 table_data.append(row)
 
     return table_data
-
 
 # Callback zur Anzeige der Parameter in einer Tabelle
 @app.callback(
@@ -370,100 +393,46 @@ def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids
         dataset_checklist_ids
     )
 
-    # Definiere die Spalten (hier beispielhaft für die Spalten ab der 3. bis vorletzten Header-Spalte)
+    # Spalten-Definition
     columns = [{'name': 'Datei', 'id': 'Datei'}]
-    for param in header[3:-2]:
+    for param in PARAMETER_TABLE_COLUMNS:
         if param == 'Isc [mA]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=1, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
         elif param == 'Voc [mV]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=0, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=0, scheme=Scheme.fixed)})
         elif param == 'Vmpp [mV]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=0, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=0, scheme=Scheme.fixed)})
         elif param == 'Impp [mA]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=1, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
         elif param == 'Pmpp [mW]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=2, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
         elif param == 'FF [%]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=2, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
         elif param == 'Rp [kOhm]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=2, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
         elif param == 'Rs [Ohm]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=1, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
         elif param == 'Eta [%]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=1, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
         elif param == 'Jsc [mA/cm²]':
-            columns.append({
-                'name': param,
-                'id': param,
-                'type': 'numeric',
-                'format': Format(precision=1, scheme=Scheme.fixed)
-            })
+            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
         else:
-            columns.append({
-                'name': param,
-                'id': param
-            })
-    
+            columns.append({'name': param, 'id': param})
+
     parameter_table = dash_table.DataTable(
         data=table_data,
         columns=columns,
         style_table={'overflowX': 'auto', 'paddingBottom': '20px'},
         style_cell={
-        'textAlign': 'left',
-        'padding': '5px',
-        'minWidth': '60px',
-        'whiteSpace': 'nowrap',  # verhindert umbrüche
-        'overflow': 'visible'    # Verhindert abgeschnittenen Text
+            'textAlign': 'left',
+            'padding': '5px',
+            'minWidth': '60px',
+            'whiteSpace': 'nowrap',  # verhindert Umbrüche
+            'overflow': 'visible'    # Verhindert abgeschnittenen Text
         },
         style_header={'backgroundColor': 'lightgrey', 'fontWeight': 'bold'}
     )
     return parameter_table
-
 
 # Callback zum Herunterladen der ausgewählten Parameter als CSV
 @app.callback(
@@ -474,9 +443,10 @@ def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids
     State({'type': 'file-checkbox', 'index': ALL}, 'id'),
     State({'type': 'dataset-checklist', 'index': ALL}, 'value'),
     State({'type': 'dataset-checklist', 'index': ALL}, 'id'),
+    State('download-columns', 'value'),
     prevent_initial_call=True
 )
-def download_selected_data(n_clicks, data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
+def download_selected_data(n_clicks, data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids, selected_columns):
     table_data = prepare_parameter_table_data(
         data_store,
         file_checkbox_values,
@@ -485,22 +455,25 @@ def download_selected_data(n_clicks, data_store, file_checkbox_values, file_chec
         dataset_checklist_ids
     )
 
-    if not table_data:
+    if not table_data or not selected_columns:
         return dash.no_update
 
     df = pd.DataFrame(table_data)
+    valid_columns = [column for column in selected_columns if column in df.columns]
+    if not valid_columns:
+        return dash.no_update
+
+    df = df[valid_columns]
     return dcc.send_data_frame(df.to_csv, 'selected_data.csv', index=False)
-
-
 
 # Server starten
 if __name__ == '__main__':
     HOST = '127.0.0.1'
     PORT = 8050
-    
+
     # Prüfe, ob Port frei ist
     if not check_port_available(HOST, PORT):
         print(f"Port {PORT} ist bereits belegt. Das Programm wird beendet.")
         sys.exit(0)
-    
+
     app.run_server(host=HOST, port=PORT, debug=False)
