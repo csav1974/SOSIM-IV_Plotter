@@ -55,12 +55,44 @@ header = [
     "Spectral Flux Density [W/m²]"
 ]
 
+# zentrale Präzisions-Map (Spalten -> Nachkommastellen) 
+PRECISION_MAP = {
+    'Isc [mA]': 1,
+    'Voc [mV]': 0,
+    'Vmpp [mV]': 0,
+    'Impp [mA]': 1,
+    'Pmpp [mW]': 2,
+    'FF [%]': 2,
+    'Rp [kOhm]': 2,
+    'Rs [Ohm]': 1,
+    'Eta [%]': 1,
+    'Jsc [mA/cm²]': 1,
+}
+
+
 PARAMETER_TABLE_COLUMNS = header[3:-2]
 DOWNLOADABLE_COLUMNS = ['Datei'] + PARAMETER_TABLE_COLUMNS
 DEFAULT_DOWNLOAD_COLUMNS = [
     column for column in ["Datei", "Isc [mA]", "Voc [mV]", "FF [%]", "Eta [%]"]
     if column in DOWNLOADABLE_COLUMNS
 ]
+
+# Formatierung für den CSV-Download 
+def format_df_for_download(df: pd.DataFrame, precision_map: dict) -> pd.DataFrame:
+    df_out = df.copy()
+    for col, prec in precision_map.items():
+        if col in df_out.columns:
+            def _fmt(v):
+                # None/NaN/Platzhalter unverändert lassen
+                if pd.isna(v) or (isinstance(v, str) and v.strip().upper() in ('INF', '#NV')):
+                    return v
+                try:
+                    return f"{float(v):.{prec}f}"
+                except Exception:
+                    return v
+            df_out[col] = df_out[col].map(_fmt)
+    return df_out
+
 
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -396,26 +428,13 @@ def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids
     # Spalten-Definition
     columns = [{'name': 'Datei', 'id': 'Datei'}]
     for param in PARAMETER_TABLE_COLUMNS:
-        if param == 'Isc [mA]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
-        elif param == 'Voc [mV]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=0, scheme=Scheme.fixed)})
-        elif param == 'Vmpp [mV]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=0, scheme=Scheme.fixed)})
-        elif param == 'Impp [mA]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
-        elif param == 'Pmpp [mW]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
-        elif param == 'FF [%]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
-        elif param == 'Rp [kOhm]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=2, scheme=Scheme.fixed)})
-        elif param == 'Rs [Ohm]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
-        elif param == 'Eta [%]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
-        elif param == 'Jsc [mA/cm²]':
-            columns.append({'name': param, 'id': param, 'type': 'numeric', 'format': Format(precision=1, scheme=Scheme.fixed)})
+        if param in PRECISION_MAP:
+            columns.append({
+                'name': param,
+                'id': param,
+                'type': 'numeric',
+                'format': Format(precision=PRECISION_MAP[param], scheme=Scheme.fixed)
+            })
         else:
             columns.append({'name': param, 'id': param})
 
@@ -464,6 +483,9 @@ def download_selected_data(n_clicks, data_store, file_checkbox_values, file_chec
         return dash.no_update
 
     df = df[valid_columns]
+
+    df = format_df_for_download(df, PRECISION_MAP)
+    
     return dcc.send_data_frame(df.to_csv, 'selected_data.csv', index=False)
 
 # Server starten
