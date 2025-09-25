@@ -94,6 +94,15 @@ def format_df_for_download(df: pd.DataFrame, precision_map: dict) -> pd.DataFram
     return df_out
 
 
+def normalize_filename(name: str) -> str:
+    # "IV Measurement" löschen
+    name = name.replace("IV Measurement", "")
+
+    # ".xlsx" am Ende entfernen
+    name = name.replace(".xlsx", "")
+
+    return name.strip("_ ")
+
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -359,7 +368,14 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
      State({'type': 'dataset-checklist', 'index': ALL}, 'id')]
 )
 def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
-    return update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
+    figure = update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
+    
+    # Update legend labels with normalized filenames
+    if figure and 'data' in figure:
+        for trace in figure['data']:
+            if 'name' in trace:
+                trace['name'] = normalize_filename(trace['name'])
+    return figure
 
 # Hilfsfunktion zum Vorbereiten der Tabellendaten basierend auf den aktiven Auswahlen
 def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
@@ -369,7 +385,7 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
     active_files = set()
     for val, comp_id in zip(file_checkbox_values, file_checkbox_ids):
         if val and comp_id.get('index'):
-            active_files.add(comp_id['index'])
+            active_files.add(comp_id['index'])  # -> IDs bleiben unverändert (Originalname)
 
     active_datasets = {}
     for val, comp_id in zip(dataset_checklist_values, dataset_checklist_ids):
@@ -379,23 +395,23 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
     table_data = []
     formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]', 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
 
-    for filename, param_rows in data_store['parameters'].items():
-        if filename not in active_files:
+    for orig_fn, param_rows in data_store['parameters'].items():
+        if orig_fn not in active_files:
             continue
+
+        display_fn = normalize_filename(orig_fn)  # <<< nur für Anzeige
+
         if param_rows is not None:
-            selected_indices = set(active_datasets.get(filename, set(range(len(param_rows)))))
+            selected_indices = set(active_datasets.get(orig_fn, set(range(len(param_rows)))))  # <<< Lookup mit Original!
             for idx, param_values in enumerate(param_rows):
                 if idx not in selected_indices:
                     continue
-                row = {'Datei': f"{filename} - Datensatz {idx + 1}"}
+                row = {'Datei': f"{display_fn} - Datensatz {idx + 1}"}  # <<< Anzeige-Name
                 for key, value in zip(header, param_values):
                     if key not in PARAMETER_TABLE_COLUMNS:
                         continue
                     if key in formatted_keys and value is not None and value != 'Inf' and str(value).strip().upper() != '#NV':
-                        if key == 'FF [%]':
-                            row[key] = float(value) * 100
-                        else:
-                            row[key] = float(value)
+                        row[key] = float(value) * 100 if key == 'FF [%]' else float(value)
                     else:
                         row[key] = value
                 table_data.append(row)
