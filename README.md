@@ -136,40 +136,40 @@ docker --version
 docker compose version
 ```
 
-Copy or clone this complete project directory onto the target machine, then run
-the following commands from the directory containing `Dockerfile` and
-`compose.yaml`.
+Copy or clone this complete project directory onto the target machine. Run all
+commands below from the project root; the container files are grouped under
+`docker/`.
 
 ### Start with Docker Compose
 
 Build the image and start the application:
 
 ```bash
-docker compose up --build
+docker compose -f docker/compose.yaml up --build
 ```
 
 Open <http://localhost:8050/>. To run in the background, use:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker/compose.yaml up -d --build
 ```
 
 Check the container and its health status:
 
 ```bash
-docker compose ps
+docker compose -f docker/compose.yaml ps
 ```
 
 View application logs:
 
 ```bash
-docker compose logs -f
+docker compose -f docker/compose.yaml logs -f
 ```
 
 Stop and remove the container and its Compose network:
 
 ```bash
-docker compose down
+docker compose -f docker/compose.yaml down
 ```
 
 The built image remains available locally as `sosim-iv-plotter:latest` and can be
@@ -180,7 +180,7 @@ started again without rebuilding unless the source or dependency files change.
 Compose is convenient but not required:
 
 ```bash
-docker build -t sosim-iv-plotter .
+docker build -f docker/Dockerfile -t sosim-iv-plotter .
 docker run --rm -p 8050:8050 sosim-iv-plotter
 ```
 
@@ -209,24 +209,24 @@ docker run --rm -p 8060:8050 sosim-iv-plotter
 ```
 
 Then open <http://localhost:8060/>. For Compose, change the port mapping in
-`compose.yaml` from `8050:8050` to `8060:8050`.
+`docker/compose.yaml` from `8050:8050` to `8060:8050`.
 
 ### Rebuild after source changes
 
 ```bash
-docker compose up --build -d
+docker compose -f docker/compose.yaml up -d --build
 ```
 
 To force a completely clean dependency and source rebuild:
 
 ```bash
-docker compose build --no-cache
-docker compose up -d
+docker compose -f docker/compose.yaml build --no-cache
+docker compose -f docker/compose.yaml up -d
 ```
 
 ## Container design
 
-The `Dockerfile`:
+The `docker/Dockerfile`:
 
 - uses the multi-platform `python:3.10-slim-bookworm` base image;
 - installs the locked production dependencies from `Pipfile.lock`;
@@ -278,9 +278,10 @@ information box, and the WSGI server export.
 ├── tests/                               Numerical and integration tests
 ├── Pipfile                              Runtime and development dependencies
 ├── Pipfile.lock                         Reproducible locked dependency versions
-├── Dockerfile                           Production container image
-├── compose.yaml                         One-command container orchestration
-└── .dockerignore                        Docker build-context exclusions
+└── docker/
+    ├── Dockerfile                       Production container image
+    ├── Dockerfile.dockerignore          Docker build-context exclusions
+    └── compose.yaml                     One-command container orchestration
 ```
 
 ### Runtime data flow
@@ -308,8 +309,8 @@ currently using port 8050.
 Inspect its status and logs:
 
 ```bash
-docker compose ps
-docker compose logs --tail=100
+docker compose -f docker/compose.yaml ps
+docker compose -f docker/compose.yaml logs --tail=100
 ```
 
 ### Dependency or build cache problems
@@ -317,9 +318,9 @@ docker compose logs --tail=100
 Rebuild without Docker's cache:
 
 ```bash
-docker compose down
-docker compose build --no-cache
-docker compose up
+docker compose -f docker/compose.yaml down
+docker compose -f docker/compose.yaml build --no-cache
+docker compose -f docker/compose.yaml up
 ```
 
 ### A workbook cannot be imported

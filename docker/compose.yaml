@@ -1,7 +1,10 @@
+name: iv-plotter
+
 services:
   iv-plotter:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
     image: sosim-iv-plotter:latest
     ports:
       - "8050:8050"
