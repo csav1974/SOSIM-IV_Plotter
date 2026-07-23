@@ -1,0 +1,8 @@
+services:
+  iv-plotter:
+    build:
+      context: .
+    image: sosim-iv-plotter:latest
+    ports:
+      - "8050:8050"
+    restart: unless-stopped

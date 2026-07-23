@@ -3,6 +3,7 @@ import dash_bootstrap_components as dbc
 import time
 
 from data_processing.file_processing import process_file_extern
+from data_processing.diode_fitting import fit_single_diode
 
 def update_output_extern(list_of_contents, list_of_names, existing_data):
     """
@@ -14,8 +15,8 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
     :param list_of_contents: Inhalten der neu hochgeladenen Dateien (Base64-Strings)
     :param list_of_names:    Liste der Dateinamen, die hochgeladen wurden
     :param existing_data:    Alter Datenbestand aus dem dcc.Store (Dictionary), 
-                             der 'file_names', 'data', 'parameters' und 'checkbox_info'
-                             enthalten kann.
+                             der 'file_names', 'data', 'parameters', 'fits' und
+                             'checkbox_info' enthalten kann.
     :return:                 Tuple aus:
                              1) HTML-Liste aller Dateinamen (alt + neu),
                              2) gemergte existing_data,
@@ -33,6 +34,8 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
         existing_data['data'] = {}
     if 'parameters' not in existing_data:
         existing_data['parameters'] = {}
+    if 'fits' not in existing_data:
+        existing_data['fits'] = {}
     if 'file_names' not in existing_data:
         existing_data['file_names'] = []
     if 'checkbox_info' not in existing_data:
@@ -87,6 +90,7 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
         # DataFrames in JSON konvertieren, damit sie in dcc.Store speicherbar sind
         new_data = {filename: [df.to_json(date_format='iso', orient='split') for df in df_list]}
         new_parameters = {filename: parameter_values_list}
+        new_fits = {filename: [fit_single_diode(df) for df in df_list]}
 
         # Falls diese Datei noch nicht vorhanden ist, einfügen
         if filename not in existing_data['file_names']:
@@ -97,6 +101,7 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
         # Mergen: Erzeuge neue Dictionaries, um den State zu ändern
         existing_data['data'] = {**existing_data.get('data', {}), **new_data}
         existing_data['parameters'] = {**existing_data.get('parameters', {}), **new_parameters}
+        existing_data['fits'] = {**existing_data.get('fits', {}), **new_fits}
         # Optional: Eine kurze Pause, um die sequentielle Verarbeitung zu erzwingen
         time.sleep(0.1)
 

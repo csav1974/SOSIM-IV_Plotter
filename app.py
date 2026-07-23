@@ -1,15 +1,8 @@
 import socket
 import sys
-
-def check_port_available(host, port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    result = sock.connect_ex((host, port))
-    sock.close()
-    return result != 0
+import math
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output, State, MATCH, ALL
@@ -19,6 +12,14 @@ import dash_bootstrap_components as dbc
 
 from data_processing.data_processing import update_output_extern
 from data_processing.graph_processing import update_graph_extern
+
+
+def check_port_available(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((host, port))
+    sock.close()
+    return result != 0
+
 
 # Header-Definition
 header = [
@@ -64,16 +65,40 @@ PRECISION_MAP = {
     'Pmpp [mW]': 2,
     'FF [%]': 2,
     'Rp [kOhm]': 2,
-    'Rs [Ohm]': 1,
+    'Rs [Ohm]': 2,
+    'Rp Fit [kOhm]': 2,
+    'Rs Fit [Ohm]': 2,
+    'Cell Area [cm²]': 2,
     'Eta [%]': 1,
     'Jsc [mA/cm²]': 1,
 }
 
 
-PARAMETER_TABLE_COLUMNS = header[3:-2]
+DERIVED_PARAMETER_COLUMNS = [
+    'Rp Fit [kOhm]',
+    'Rs Fit [Ohm]',
+    'Cell Area [cm²]'
+]
+PRIMARY_PARAMETER_COLUMNS = [
+    'Voc [mV]',
+    'Isc [mA]',
+    'Jsc [mA/cm²]',
+    'FF [%]',
+    'Eta [%]',
+    'Rp [kOhm]',
+    'Rs [Ohm]',
+    'Rp Fit [kOhm]',
+    'Rs Fit [Ohm]',
+    'Cell Area [cm²]'
+]
+ALL_PARAMETER_COLUMNS = header[3:-2] + DERIVED_PARAMETER_COLUMNS
+PARAMETER_TABLE_COLUMNS = PRIMARY_PARAMETER_COLUMNS + [
+    column for column in ALL_PARAMETER_COLUMNS
+    if column not in PRIMARY_PARAMETER_COLUMNS
+]
 DOWNLOADABLE_COLUMNS = ['Datei'] + PARAMETER_TABLE_COLUMNS
 DEFAULT_DOWNLOAD_COLUMNS = [
-    column for column in ["Datei", "Isc [mA]", "Voc [mV]", "FF [%]", "Eta [%]"]
+    column for column in ["Datei", "Voc [mV]", "Isc [mA]", "FF [%]", "Eta [%]"]
     if column in DOWNLOADABLE_COLUMNS
 ]
 
@@ -94,6 +119,21 @@ def format_df_for_download(df: pd.DataFrame, precision_map: dict) -> pd.DataFram
     return df_out
 
 
+def calculate_cell_area(isc, jsc):
+    """Calculate cell area in cm² from matching mA-based Isc and Jsc values."""
+
+    try:
+        isc_value = float(isc)
+        jsc_value = float(jsc)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(isc_value) or not math.isfinite(jsc_value):
+        return None
+    if jsc_value == 0.0:
+        return None
+    return isc_value / jsc_value
+
+
 def normalize_filename(name: str) -> str:
     # "IV Measurement" löschen
     name = name.replace("IV Measurement", "")
@@ -105,6 +145,7 @@ def normalize_filename(name: str) -> str:
 
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
 
 # Layout der App definieren
 app.layout = dbc.Container([
@@ -168,7 +209,15 @@ app.layout = dbc.Container([
                         id='y-flip-btn',
                         color='primary',
                         outline=True,
-                        active=False        # start inaktiv
+                        active=False,
+                        className='me-2'
+                    ),
+                    dbc.Button(
+                        'Fit-Kurve',
+                        id='fit-overlay-btn',
+                        color='info',
+                        outline=False,
+                        active=True
                     )
                 ],
                 className='d-flex align-items-center mb-3'
@@ -223,6 +272,51 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.H5('Parameter der hochgeladenen Dateien:'),
+            dbc.Button(
+                'Fit-Info anzeigen',
+                id='fit-info-btn',
+                color='info',
+                outline=True,
+                size='sm',
+                className='mt-2 mb-2'
+            ),
+            dbc.Collapse(
+                dbc.Alert(
+                    [
+                        html.H6(
+                            'Info: Berechnung von Rs und Rp',
+                            className='alert-heading'
+                        ),
+                        html.P(
+                            [
+                                'Als Startwerte werden die lokalen Steigungen verwendet: ',
+                                html.Code('Rp ≈ -dV/dI bei V ≈ 0'),
+                                ' und ',
+                                html.Code('Rs ≈ -dV/dI bei I ≈ 0'),
+                                '. Danach werden Rs und Rp gemeinsam mit Photostrom, '
+                                'Sättigungsstrom und effektiver Diodenspannung durch eine '
+                                'robuste nichtlineare Kleinste-Quadrate-Anpassung bestimmt.'
+                            ],
+                            className='mb-1'
+                        ),
+                        html.Small(
+                            [
+                                'Verwendetes Ein-Dioden-Modell: ',
+                                html.Code(
+                                    'I = Iph - I0·(exp((V + I·Rs)/a) - 1) '
+                                    '- (V + I·Rs)/Rp'
+                                ),
+                                '. Die Fit-Werte stehen zusätzlich neben den aus der Datei '
+                                'ausgelesenen Rs-/Rp-Werten.'
+                            ]
+                        )
+                    ],
+                    color='info',
+                    className='mb-3'
+                ),
+                id='fit-info-collapse',
+                is_open=False
+            ),
             html.Div(
                 [
                     dbc.Button('Download Data', id='download-btn', color='success'),
@@ -339,6 +433,36 @@ def toggle_flip_buttons(x_n, y_n, x_active, y_active):
     # outline umkehren, damit aktiv = gefüllt, inaktiv = outline
     return x_active, not x_active, y_active, not y_active
 
+
+@app.callback(
+    [
+        Output('fit-overlay-btn', 'active'),
+        Output('fit-overlay-btn', 'outline')
+    ],
+    Input('fit-overlay-btn', 'n_clicks'),
+    State('fit-overlay-btn', 'active'),
+    prevent_initial_call=True
+)
+def toggle_fit_overlay(_n_clicks, active):
+    active = not active
+    return active, not active
+
+
+@app.callback(
+    [
+        Output('fit-info-collapse', 'is_open'),
+        Output('fit-info-btn', 'children')
+    ],
+    Input('fit-info-btn', 'n_clicks'),
+    State('fit-info-collapse', 'is_open'),
+    prevent_initial_call=True
+)
+def toggle_fit_info(_n_clicks, is_open):
+    is_open = not is_open
+    button_label = 'Fit-Info ausblenden' if is_open else 'Fit-Info anzeigen'
+    return is_open, button_label
+
+
 # Callback zur Synchronisation von Datei- und Datensatz-Checkboxes
 @app.callback(
     Output({'type': 'dataset-checklist', 'index': MATCH}, 'value'),
@@ -363,12 +487,27 @@ def update_dataset_checklist(file_checkbox_value, dataset_options):
      Input('y-min-input', 'value'),
      Input('y-max-input', 'value'),
      Input('x-flip-btn', 'active'),
-     Input('y-flip-btn', 'active')],
+     Input('y-flip-btn', 'active'),
+     Input('fit-overlay-btn', 'active')],
     [State('data-store', 'data'),
      State({'type': 'dataset-checklist', 'index': ALL}, 'id')]
 )
-def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
-    figure = update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids)
+def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input,
+                 x_max_input, y_min_input, y_max_input, x_flip_btn,
+                 y_flip_btn, show_fit_overlay, data_store, ids):
+    figure = update_graph_extern(
+        selected_datasets_per_file,
+        axis_range_toggle,
+        x_min_input,
+        x_max_input,
+        y_min_input,
+        y_max_input,
+        x_flip_btn,
+        y_flip_btn,
+        show_fit_overlay,
+        data_store,
+        ids
+    )
     
     # Update legend labels with normalized filenames
     if figure and 'data' in figure:
@@ -379,7 +518,7 @@ def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input, x_m
 
 # Hilfsfunktion zum Vorbereiten der Tabellendaten basierend auf den aktiven Auswahlen
 def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
-    if not data_store or 'parameters' not in data_store:
+    if not data_store:
         return []
 
     active_files = set()
@@ -395,18 +534,31 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
     table_data = []
     formatted_keys = ['Isc [mA]', 'Voc [mV]', 'Vmpp [mV]', 'Impp [mA]', 'Pmpp [mW]', 'FF [%]', 'Rp [kOhm]', 'Rs [Ohm]', 'Eta [%]', 'Jsc [mA/cm²]']
 
-    for orig_fn, param_rows in data_store['parameters'].items():
+    file_names = data_store.get('file_names', [])
+    if not file_names:
+        file_names = list(data_store.get('data', {}).keys())
+
+    for orig_fn in file_names:
         if orig_fn not in active_files:
             continue
 
         display_fn = normalize_filename(orig_fn)  # <<< nur für Anzeige
-
-        if param_rows is not None:
-            selected_indices = set(active_datasets.get(orig_fn, set(range(len(param_rows)))))  # <<< Lookup mit Original!
-            for idx, param_values in enumerate(param_rows):
-                if idx not in selected_indices:
-                    continue
-                row = {'Datei': f"{display_fn} - Datensatz {idx + 1}"}  # <<< Anzeige-Name
+        param_rows = data_store.get('parameters', {}).get(orig_fn) or []
+        fit_rows = data_store.get('fits', {}).get(orig_fn) or []
+        dataset_count = max(
+            len(data_store.get('data', {}).get(orig_fn, [])),
+            len(param_rows),
+            len(fit_rows)
+        )
+        selected_indices = set(
+            active_datasets.get(orig_fn, set(range(dataset_count)))
+        )
+        for idx in range(dataset_count):
+            if idx not in selected_indices:
+                continue
+            row = {'Datei': f"{display_fn} - Datensatz {idx + 1}"}
+            if idx < len(param_rows):
+                param_values = param_rows[idx]
                 for key, value in zip(header, param_values):
                     if key not in PARAMETER_TABLE_COLUMNS:
                         continue
@@ -414,7 +566,18 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
                         row[key] = float(value) * 100 if key == 'FF [%]' else float(value)
                     else:
                         row[key] = value
-                table_data.append(row)
+            row['Cell Area [cm²]'] = calculate_cell_area(
+                row.get('Isc [mA]'),
+                row.get('Jsc [mA/cm²]')
+            )
+            fit = fit_rows[idx] if idx < len(fit_rows) else None
+            if isinstance(fit, dict) and fit.get('success'):
+                row['Rp Fit [kOhm]'] = fit.get('rp_kohm')
+                row['Rs Fit [Ohm]'] = fit.get('rs_ohm')
+            else:
+                row['Rp Fit [kOhm]'] = None
+                row['Rs Fit [Ohm]'] = None
+            table_data.append(row)
 
     return table_data
 
@@ -430,7 +593,7 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
     ]
 )
 def update_header_parameters(data_store, file_checkbox_values, file_checkbox_ids, dataset_checklist_values, dataset_checklist_ids):
-    if not data_store or 'parameters' not in data_store:
+    if not data_store:
         return ''
 
     table_data = prepare_parameter_table_data(
@@ -514,4 +677,4 @@ if __name__ == '__main__':
         print(f"Port {PORT} ist bereits belegt. Das Programm wird beendet.")
         sys.exit(0)
 
-    app.run_server(host=HOST, port=PORT, debug=False)
+    app.run(host=HOST, port=PORT, debug=False)

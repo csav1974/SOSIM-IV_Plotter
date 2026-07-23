@@ -1,8 +1,21 @@
 import plotly.graph_objects as go
+from plotly.colors import qualitative
 import pandas as pd
 import io
 
-def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_input, x_max_input, y_min_input, y_max_input, x_flip_btn, y_flip_btn, data_store, ids):
+def update_graph_extern(
+    selected_datasets_per_file,
+    axis_range_toggle,
+    x_min_input,
+    x_max_input,
+    y_min_input,
+    y_max_input,
+    x_flip_btn,
+    y_flip_btn,
+    show_fit_overlay,
+    data_store,
+    ids,
+):
     # Erstelle eine leere Figur mit go.Figure
     fig = go.Figure()
     
@@ -11,6 +24,7 @@ def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_inp
 
     all_x_values = []
     all_y_values = []
+    trace_index = 0
 
     for selected_datasets, id_dict in zip(selected_datasets_per_file, ids):
         filename = id_dict['index']
@@ -19,6 +33,8 @@ def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_inp
             df_json = df_json_list[idx]
             df = pd.read_json(io.StringIO(df_json), orient='split')
             label = f'{filename} - Datensatz {idx + 1}'
+            color = qualitative.Plotly[trace_index % len(qualitative.Plotly)]
+            trace_index += 1
 
 
             # Bereite die x- und y-Werte vor und flippe sie ggf.
@@ -40,9 +56,34 @@ def update_graph_extern(selected_datasets_per_file, axis_range_toggle, x_min_inp
                     x=x_vals,
                     y=y_vals,
                     mode='lines',
-                    name=label
+                    name=label,
+                    legendgroup=label,
+                    line={'color': color}
                 )
             )
+
+            fit_list = data_store.get('fits', {}).get(filename, [])
+            if show_fit_overlay and idx < len(fit_list):
+                fit = fit_list[idx]
+                if fit and fit.get('success'):
+                    fit_x = pd.Series(fit.get('voltage_mv', []), dtype=float)
+                    fit_y = pd.Series(fit.get('current_ma', []), dtype=float)
+                    if x_flip_btn:
+                        fit_x = -fit_x
+                    if y_flip_btn:
+                        fit_y = -fit_y
+                    all_x_values.extend(fit_x.tolist())
+                    all_y_values.extend(fit_y.tolist())
+                    fig.add_trace(
+                        go.Scatter(
+                            x=fit_x,
+                            y=fit_y,
+                            mode='lines',
+                            name=f'{label} - Fit',
+                            legendgroup=label,
+                            line={'color': color, 'dash': 'dash', 'width': 2}
+                        )
+                    )
     
     if axis_range_toggle == 'manual':
         # Verwende die vom Benutzer eingegebenen Werte

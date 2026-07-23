@@ -10,9 +10,12 @@ plotly = "*"
 openpyxl = "*"
 pylightxl = "*"
 dash-bootstrap-components = "*"
+scipy = "*"
+gunicorn = "*"
 
 [dev-packages]
 openpyxl = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.10"
