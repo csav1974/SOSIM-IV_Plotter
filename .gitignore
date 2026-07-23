@@ -164,5 +164,4 @@ cython_debug/
 # Lokal stuff
 .codex
 .vscode/
-example/Data/
 GOALS/
