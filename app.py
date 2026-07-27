@@ -11,6 +11,7 @@ from dash.dash_table.Format import Format, Scheme
 import dash_bootstrap_components as dbc
 
 from data_processing.data_processing import update_output_extern
+from data_processing.filename_formatting import normalize_filename
 from data_processing.graph_processing import update_graph_extern
 
 
@@ -133,15 +134,6 @@ def calculate_cell_area(isc, jsc):
         return None
     return isc_value / jsc_value
 
-
-def normalize_filename(name: str) -> str:
-    # "IV Measurement" löschen
-    name = name.replace("IV Measurement", "")
-
-    # ".xlsx" am Ende entfernen
-    name = name.replace(".xlsx", "")
-
-    return name.strip("_ ")
 
 # Dash-App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -509,11 +501,6 @@ def update_graph(selected_datasets_per_file, axis_range_toggle, x_min_input,
         ids
     )
     
-    # Update legend labels with normalized filenames
-    if figure and 'data' in figure:
-        for trace in figure['data']:
-            if 'name' in trace:
-                trace['name'] = normalize_filename(trace['name'])
     return figure
 
 # Hilfsfunktion zum Vorbereiten der Tabellendaten basierend auf den aktiven Auswahlen
@@ -539,10 +526,6 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
         file_names = list(data_store.get('data', {}).keys())
 
     for orig_fn in file_names:
-        if orig_fn not in active_files:
-            continue
-
-        display_fn = normalize_filename(orig_fn)  # <<< nur für Anzeige
         param_rows = data_store.get('parameters', {}).get(orig_fn) or []
         fit_rows = data_store.get('fits', {}).get(orig_fn) or []
         dataset_count = max(
@@ -550,9 +533,14 @@ def prepare_parameter_table_data(data_store, file_checkbox_values, file_checkbox
             len(param_rows),
             len(fit_rows)
         )
-        selected_indices = set(
-            active_datasets.get(orig_fn, set(range(dataset_count)))
-        )
+        if orig_fn in active_datasets:
+            selected_indices = active_datasets[orig_fn]
+        elif orig_fn in active_files:
+            selected_indices = set(range(dataset_count))
+        else:
+            continue
+
+        display_fn = normalize_filename(orig_fn)
         for idx in range(dataset_count):
             if idx not in selected_indices:
                 continue

@@ -3,6 +3,9 @@ from plotly.colors import qualitative
 import pandas as pd
 import io
 
+from data_processing.filename_formatting import normalize_filename
+
+
 def update_graph_extern(
     selected_datasets_per_file,
     axis_range_toggle,
@@ -28,11 +31,12 @@ def update_graph_extern(
 
     for selected_datasets, id_dict in zip(selected_datasets_per_file, ids):
         filename = id_dict['index']
+        display_filename = normalize_filename(filename)
         df_json_list = data_store['data'].get(filename, [])
         for idx in selected_datasets:
             df_json = df_json_list[idx]
             df = pd.read_json(io.StringIO(df_json), orient='split')
-            label = f'{filename} - Datensatz {idx + 1}'
+            label = f'{display_filename} - Datensatz {idx + 1}'
             color = qualitative.Plotly[trace_index % len(qualitative.Plotly)]
             trace_index += 1
 

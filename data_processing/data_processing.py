@@ -4,6 +4,14 @@ import time
 
 from data_processing.file_processing import process_file_extern
 from data_processing.diode_fitting import fit_single_diode
+from data_processing.filename_formatting import split_filename_datetime
+
+
+def _checkbox_filename_label(filename):
+    display_name, datetime_text = split_filename_datetime(filename)
+    if datetime_text is None:
+        return display_name
+    return html.Span([display_name, html.Br(), datetime_text])
 
 def update_output_extern(list_of_contents, list_of_names, existing_data):
     """
@@ -57,7 +65,10 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
             )
             file_checkbox = dcc.Checklist(
                 id={'type': 'file-checkbox', 'index': filename},
-                options=[{'label': filename, 'value': filename}],
+                options=[{
+                    'label': _checkbox_filename_label(filename),
+                    'value': filename
+                }],
                 value=[filename],
                 labelStyle={'font-weight': 'bold'}
             )
@@ -121,7 +132,10 @@ def update_output_extern(list_of_contents, list_of_names, existing_data):
         )
         file_checkbox = dcc.Checklist(
             id={'type': 'file-checkbox', 'index': filename},
-            options=[{'label': filename, 'value': filename}],
+            options=[{
+                'label': _checkbox_filename_label(filename),
+                'value': filename
+            }],
             value=[filename],
             labelStyle={'font-weight': 'bold'}
         )

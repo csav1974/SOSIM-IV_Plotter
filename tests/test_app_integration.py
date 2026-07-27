@@ -1,4 +1,5 @@
 import pandas as pd
+from dash import html
 
 from app import (
     PARAMETER_TABLE_COLUMNS,
@@ -8,12 +9,17 @@ from app import (
     prepare_parameter_table_data,
     server,
     toggle_fit_info,
+    update_header_parameters,
 )
 from data_processing import data_processing
+from data_processing.filename_formatting import (
+    normalize_filename,
+    split_filename_datetime,
+)
 from data_processing.graph_processing import update_graph_extern
 
 
-def _data_store():
+def _data_store(filename="IV Measurement_sample.xlsx"):
     dataframe = pd.DataFrame(
         {
             "Voltage [mV]": [-100.0, 0.0, 500.0],
@@ -27,13 +33,13 @@ def _data_store():
     parameters[header.index("Rp [kOhm]")] = 1.2
     parameters[header.index("Rs [Ohm]")] = 2.4
     return {
-        "file_names": ["IV Measurement_sample.xlsx"],
+        "file_names": [filename],
         "data": {
-            "IV Measurement_sample.xlsx": [dataframe.to_json(orient="split")],
+            filename: [dataframe.to_json(orient="split")],
         },
-        "parameters": {"IV Measurement_sample.xlsx": [parameters]},
+        "parameters": {filename: [parameters]},
         "fits": {
-            "IV Measurement_sample.xlsx": [
+            filename: [
                 {
                     "success": True,
                     "rp_kohm": 1.5,
@@ -106,6 +112,88 @@ def test_cell_area_calculation_handles_valid_and_invalid_values():
     assert calculate_cell_area(float("inf"), 30.0) is None
 
 
+def test_filename_display_removes_only_export_prefix_and_xlsx_suffix():
+    assert normalize_filename("IV Measurement_sample.xlsx") == "sample"
+    assert normalize_filename("IV Measurement_sample.XLSX") == "sample"
+    assert normalize_filename("sample.xlsx") == "sample"
+    assert normalize_filename("sample_IV Measurement_note.xlsx") == (
+        "sample_IV Measurement_note"
+    )
+
+
+def test_filename_datetime_is_split_only_for_valid_trailing_values():
+    assert normalize_filename(
+        "IV Measurement_ref_24-09-30_1535.xlsx"
+    ) == "ref_24-09-30_1535"
+    assert split_filename_datetime(
+        "IV Measurement_ref_24-09-30_1535.xlsx"
+    ) == ("ref", "24-09-30_1535")
+    assert split_filename_datetime(
+        "IV Measurement_ref_24-13-30_1535.xlsx"
+    ) == ("ref_24-13-30_1535", None)
+    assert split_filename_datetime(
+        "IV Measurement_ref_24-09-30_1535_note.xlsx"
+    ) == ("ref_24-09-30_1535_note", None)
+
+
+def test_checkbox_uses_clean_name_and_puts_datetime_on_second_line():
+    filename = "IV Measurement_ref_24-09-30_1535.xlsx"
+    existing_data = {
+        "file_names": [filename],
+        "data": {},
+        "parameters": {},
+        "fits": {},
+        "checkbox_info": {filename: {"ds_count": 1}},
+    }
+
+    _, _, checkbox_row = data_processing.update_output_extern(
+        None, None, existing_data
+    )
+    checkbox = _find_component(
+        checkbox_row, {"type": "file-checkbox", "index": filename}
+    )
+    label = checkbox.options[0]["label"]
+
+    assert isinstance(label, html.Span)
+    assert label.children[0] == "ref"
+    assert isinstance(label.children[1], html.Br)
+    assert label.children[2] == "24-09-30_1535"
+    assert checkbox.options[0]["value"] == filename
+
+
+def test_datetime_filename_stays_on_one_line_in_table_and_plot():
+    filename = "IV Measurement_ref_24-09-30_1535.xlsx"
+    data_store = _data_store(filename)
+    file_id = {"type": "file-checkbox", "index": filename}
+    dataset_id = {"type": "dataset-checklist", "index": filename}
+
+    rows = prepare_parameter_table_data(
+        data_store,
+        [[filename]],
+        [file_id],
+        [[0]],
+        [dataset_id],
+    )
+    figure = update_graph_extern(
+        [[0]],
+        "auto",
+        None,
+        None,
+        None,
+        None,
+        False,
+        False,
+        True,
+        data_store,
+        [dataset_id],
+    )
+
+    expected_name = "ref_24-09-30_1535 - Datensatz 1"
+    assert rows[0]["Datei"] == expected_name
+    assert figure.data[0].name == expected_name
+    assert figure.data[1].name == f"{expected_name} - Fit"
+
+
 def test_parameter_table_keeps_read_values_and_adds_fit_values():
     rows = prepare_parameter_table_data(
         _data_store(),
@@ -122,6 +210,54 @@ def test_parameter_table_keeps_read_values_and_adds_fit_values():
     assert rows[0]["Rp Fit [kOhm]"] == 1.5
     assert rows[0]["Rs Fit [Ohm]"] == 1.8
     assert rows[0]["Cell Area [cm²]"] == 4.0
+
+
+def test_selected_dataset_parameters_show_when_parent_file_is_unselected():
+    filename = "IV Measurement_sample.xlsx"
+    file_id = {"type": "file-checkbox", "index": filename}
+    dataset_id = {"type": "dataset-checklist", "index": filename}
+
+    parameter_table = update_header_parameters(
+        _data_store(),
+        [[]],
+        [file_id],
+        [[0]],
+        [dataset_id],
+    )
+
+    assert len(parameter_table.data) == 1
+    assert parameter_table.data[0]["Datei"] == "sample - Datensatz 1"
+    assert parameter_table.data[0]["Voc [mV]"] == 620.0
+    assert parameter_table.data[0]["Rp Fit [kOhm]"] == 1.5
+
+
+def test_unselected_file_with_no_selected_dataset_hides_parameters():
+    filename = "IV Measurement_sample.xlsx"
+
+    rows = prepare_parameter_table_data(
+        _data_store(),
+        [[]],
+        [{"type": "file-checkbox", "index": filename}],
+        [[]],
+        [{"type": "dataset-checklist", "index": filename}],
+    )
+
+    assert rows == []
+
+
+def test_selected_file_remains_fallback_when_dataset_state_is_absent():
+    filename = "IV Measurement_sample.xlsx"
+
+    rows = prepare_parameter_table_data(
+        _data_store(),
+        [[filename]],
+        [{"type": "file-checkbox", "index": filename}],
+        [],
+        [],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["Datei"] == "sample - Datensatz 1"
 
 
 def test_upload_processing_stores_one_fit_per_dataset(monkeypatch):
@@ -190,6 +326,8 @@ def test_graph_overlay_can_be_toggled_and_tracks_axis_flips():
     )
 
     assert len(visible.data) == 2
+    assert visible.data[0].name == "sample - Datensatz 1"
+    assert visible.data[1].name == "sample - Datensatz 1 - Fit"
     assert visible.data[1].line.dash == "dash"
     assert visible.data[0].line.color == visible.data[1].line.color
     assert len(hidden.data) == 1
