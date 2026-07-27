@@ -6,6 +6,19 @@ import io
 from data_processing.filename_formatting import normalize_filename
 
 
+def _current_plot_multiplier(dataframe, y_flip):
+    """Return the sign needed for a consistent plotted-current orientation."""
+
+    power_column = dataframe.get('Power [mW]')
+    power_is_empty = (
+        power_column is not None
+        and not pd.to_numeric(power_column, errors='coerce').notna().any()
+    )
+    automatic_correction = -1 if power_is_empty else 1
+    manual_flip = -1 if y_flip else 1
+    return automatic_correction * manual_flip
+
+
 def update_graph_extern(
     selected_datasets_per_file,
     axis_range_toggle,
@@ -43,12 +56,11 @@ def update_graph_extern(
 
             # Bereite die x- und y-Werte vor und flippe sie ggf.
             x_vals = df['Voltage [mV]']
-            y_vals = df['Current [mA]']
+            current_multiplier = _current_plot_multiplier(df, y_flip_btn)
+            y_vals = current_multiplier * df['Current [mA]']
 
             if x_flip_btn:      # hier deine Variable aus dem Callback
                 x_vals = -1 * x_vals
-            if y_flip_btn:      # hier deine Variable aus dem Callback
-                y_vals = -1 * y_vals
 
             # Sammle alle x- und y-Werte für die Achsenskalierung
             all_x_values.extend(x_vals.tolist())
@@ -74,8 +86,7 @@ def update_graph_extern(
                     fit_y = pd.Series(fit.get('current_ma', []), dtype=float)
                     if x_flip_btn:
                         fit_x = -fit_x
-                    if y_flip_btn:
-                        fit_y = -fit_y
+                    fit_y = current_multiplier * fit_y
                     all_x_values.extend(fit_x.tolist())
                     all_y_values.extend(fit_y.tolist())
                     fig.add_trace(

@@ -24,6 +24,7 @@ def _data_store(filename="IV Measurement_sample.xlsx"):
         {
             "Voltage [mV]": [-100.0, 0.0, 500.0],
             "Current [mA]": [35.0, 34.0, 5.0],
+            "Power [mW]": [-3.5, 0.0, 2.5],
         }
     )
     parameters = [None] * len(header)
@@ -333,3 +334,74 @@ def test_graph_overlay_can_be_toggled_and_tracks_axis_flips():
     assert len(hidden.data) == 1
     assert list(flipped.data[1].x) == [100.0, -0.0, -500.0]
     assert list(flipped.data[1].y) == [-35.1, -34.1, -4.9]
+
+
+def test_empty_power_dataset_matches_normal_current_orientation_in_plot():
+    filename = "IV Measurement_mixed.xlsx"
+    voltage = [-100.0, 0.0, 500.0]
+    normal_current = [-35.0, -34.0, -5.0]
+    affected_current = [35.0, 34.0, 5.0]
+    normal = pd.DataFrame(
+        {
+            "Voltage [mV]": voltage,
+            "Current [mA]": normal_current,
+            "Power [mW]": [3.5, 0.0, -2.5],
+        }
+    )
+    affected = pd.DataFrame(
+        {
+            "Voltage [mV]": voltage,
+            "Current [mA]": affected_current,
+            "Power [mW]": [None, "", None],
+        }
+    )
+    normal_fit = [-35.1, -34.1, -4.9]
+    affected_fit = [35.1, 34.1, 4.9]
+    data_store = {
+        "data": {
+            filename: [
+                normal.to_json(orient="split"),
+                affected.to_json(orient="split"),
+            ]
+        },
+        "fits": {
+            filename: [
+                {
+                    "success": True,
+                    "voltage_mv": voltage,
+                    "current_ma": normal_fit,
+                },
+                {
+                    "success": True,
+                    "voltage_mv": voltage,
+                    "current_ma": affected_fit,
+                },
+            ]
+        },
+    }
+    graph_arguments = (
+        [[0, 1]],
+        "auto",
+        None,
+        None,
+        None,
+        None,
+        False,
+    )
+    ids = [{"type": "dataset-checklist", "index": filename}]
+
+    figure = update_graph_extern(
+        *graph_arguments, False, True, data_store, ids
+    )
+    flipped = update_graph_extern(
+        *graph_arguments, True, True, data_store, ids
+    )
+
+    assert list(figure.data[0].y) == normal_current
+    assert list(figure.data[2].y) == normal_current
+    assert list(figure.data[1].y) == normal_fit
+    assert list(figure.data[3].y) == normal_fit
+    assert list(flipped.data[0].y) == affected_current
+    assert list(flipped.data[2].y) == affected_current
+    assert list(flipped.data[1].y) == affected_fit
+    assert list(flipped.data[3].y) == affected_fit
